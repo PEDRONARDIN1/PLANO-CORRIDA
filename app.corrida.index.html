@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gerador de Plano de Corrida</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#0f172a; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial; background:linear-gradient(180deg,#0b1020,#0a0f1d); color:var(--text)}
+    .container{max-width:980px; margin:32px auto; padding:16px}
+    header h1{margin:0 0 8px; font-size:clamp(24px,4.5vw,38px)}
+    header p{margin:0 0 16px; color:var(--muted)}
+    .card{background:rgba(17,24,39,.75); border:1px solid rgba(148,163,184,.18); border-radius:18px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.2); backdrop-filter:blur(6px)}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px}
+    label{font-size:12px; color:var(--muted); display:block; margin-bottom:6px}
+    input, select{width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(148,163,184,.25); background:#0b1222; color:var(--text); outline:none}
+    input::placeholder{color:#7b8794}
+    .row{display:flex; gap:8px; flex-wrap:wrap}
+    button{border:0; padding:12px 14px; border-radius:12px; font-weight:600; cursor:pointer}
+    button.primary{background:var(--accent); color:#052012}
+    button.ghost{background:transparent; border:1px solid rgba(148,163,184,.25); color:var(--muted)}
+    .badges{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+    .badge{display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid rgba(148,163,184,.25); color:var(--muted)}
+    .section-title{margin:18px 0 8px; font-size:18px}
+    table{width:100%; border-collapse:collapse; margin-top:8px}
+    th, td{padding:10px; border-bottom:1px dashed rgba(148,163,184,.15); text-align:left}
+    tr:hover td{background:rgba(148,163,184,.06)}
+    .muted{color:var(--muted)}
+    .ok{color:var(--accent)}
+    .warn{color:#f59e0b}
+    .danger{color:var(--danger)}
+    footer{margin-top:18px; text-align:center; color:var(--muted); font-size:12px}
+    .tips{font-size:13px; color:var(--muted)}
+    .sticky{position:sticky; top:0; z-index:5}
+    .hidden{display:none}
+    @media (prefers-color-scheme:light){
+      body{background:#f7f8fb; color:#0f172a}
+      .card{background:#fff}
+      input,select{background:#fff}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Gerador de Plano de Corrida</h1>
+      <p>Crie um plano semanal personalizado em segundos: escolha seu nível, distância-alvo, data e quantos dias por semana você quer treinar.</p>
+      <div class="badges">
+        <span class="badge">100% offline</span>
+        <span class="badge">Salva no navegador</span>
+        <span class="badge">Exporta CSV</span>
+      </div>
+    </header>
+
+    <section class="card" aria-label="Formulário">
+      <div class="grid">
+        <div>
+          <label for="name">Seu nome (opcional)</label>
+          <input id="name" type="text" placeholder="Ex.: Ana" />
+        </div>
+        <div>
+          <label for="level">Nível</label>
+          <select id="level">
+            <option value="iniciante">Iniciante</option>
+            <option value="intermediario">Intermediário</option>
+            <option value="avancado">Avançado</option>
+          </select>
+        </div>
+        <div>
+          <label for="target">Distância alvo</label>
+          <select id="target">
+            <option value="5">5 km</option>
+            <option value="10">10 km</option>
+            <option value="21">21 km (Meia)</option>
+            <option value="42">42 km (Maratona)</option>
+            <option value="base">Condicionamento (sem prova)</option>
+          </select>
+        </div>
+        <div>
+          <label for="days">Dias de treino por semana</label>
+          <select id="days">
+            <option>3</option>
+            <option>4</option>
+            <option selected>5</option>
+            <option>6</option>
+          </select>
+        </div>
+        <div>
+          <label for="date">Data alvo</label>
+          <input id="date" type="date" />
+        </div>
+        <div>
+          <label for="easy">Pace fácil (opcional, min/km)</label>
+          <input id="easy" type="text" placeholder="Ex.: 6:30" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="btn-generate" class="primary">Gerar plano</button>
+        <button id="btn-export" class="ghost" disabled>Exportar CSV</button>
+        <button id="btn-print" class="ghost" disabled>Imprimir</button>
+        <span id="status" class="muted" role="status" aria-live="polite"></span>
+      </div>
+      <div class="tips" style="margin-top:8px">Dica: se não tiver uma prova marcada, escolha "Condicionamento" e defina uma data 8–12 semanas à frente.</div>
+    </section>
+
+    <section id="summary" class="card hidden" aria-label="Resumo">
+      <div id="summary-content"></div>
+    </section>
+
+    <section id="plan" class="card hidden" aria-label="Plano semanal">
+      <div class="row sticky" style="background:inherit; padding-bottom:8px; margin-bottom:8px; align-items:center">
+        <h2 class="section-title" style="margin:0; flex:1">Plano detalhado</h2>
+        <div class="tips">Legenda: Fácil = leve (RPE 4–5) • Tempo = moderado/forte (RPE 6–7) • Intervalos = forte (RPE 8)</div>
+      </div>
+      <div id="table-wrapper"></div>
+    </section>
+
+    <footer>
+      ⚠️ Este app não substitui orientação profissional. Se tiver histórico de lesão ou condição clínica, consulte um médico/treinador.
+    </footer>
+  </div>
+
+  <script>
+    (function(){
+      'use strict';
+      const $ = (s,r=document)=>r.querySelector(s);
+      const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+      const STORAGE_KEY = 'runplan.v1';
+
+      const dom = {
+        name: $('#name'), level: $('#level'), target: $('#target'), days: $('#days'), date: $('#date'), easy: $('#easy'),
+        btnGen: $('#btn-generate'), btnExport: $('#btn-export'), btnPrint: $('#btn-print'),
+        status: $('#status'), summary: $('#summary'), summaryContent: $('#summary-content'),
+        plan: $('#plan'), tableWrapper: $('#table-wrapper')
+      };
+
+      // Load saved form values
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if(saved){
+          ['name','level','target','days','date','easy'].forEach(k => { if(saved[k]) dom[k].value = saved[k]; });
+        }
+      } catch {}
+
+      function saveForm(){
+        const data = getForm();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+
+      function getForm(){
+        return {
+          name: dom.name.value.trim(),
+          level: dom.level.value,
+          target: dom.target.value,
+          days: parseInt(dom.days.value,10),
+          date: dom.date.value,
+          easy: dom.easy.value.trim()
+        };
+      }
+
+      function daysBetween(a,b){
+        const ms = (b - a); return Math.ceil(ms / (24*60*60*1000));
+      }
+
+      function nextMonday(d){
+        const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const day = dt.getDay(); // 0=Sun..6=Sat
+        const diff = (8 - (day||7)) % 7; // days until next Monday
+        dt.setDate(dt.getDate() + (diff===0?7:diff));
+        dt.setHours(0,0,0,0);
+        return dt;
+      }
+
+      function ceilHalf(x){ return Math.round(x*2)/2; }
+
+      function paceToSec(str){
+        if(!str) return null;
+        const m = str.match(/^(\d{1,2}):(\d{2})$/);
+        if(!m) return null;
+        const [_,mm,ss] = m; return parseInt(mm,10)*60 + parseInt(ss,10);
+      }
+      function secToPace(sec){
+        sec = Math.max(180, Math.round(sec));
+        const mm = Math.floor(sec/60), ss = sec%60; return `${mm}:${String(ss).padStart(2,'0')}`;
+      }
+
+      function computePaces(easySec){
+        if(!easySec) return null;
+        const easy = easySec;
+        return {
+          easy: secToPace(easy),
+          long: secToPace(easy + 20),
+          tempo: secToPace(easy - 25),
+          interval: secToPace(easy - 45)
+        };
+      }
+
+      function rpeText(type){
+        switch(type){
+          case 'easy': return 'RPE 4–5 (conversa confortável)';
+          case 'recovery': return 'RPE 3–4 (bem leve)';
+          case 'long': return 'RPE 4–5 (estável, sem forçar)';
+          case 'tempo': return 'RPE 6–7 (frases curtas)';
+          case 'interval': return 'RPE 8 (palavras soltas)';
+          default: return '';
+        }
+      }
+
+      function levelStartKm(level, days){
+        // volume inicial aproximado (km/semana)
+        if(level==='iniciante') return Math.max(12, days*3);
+        if(level==='intermediario') return Math.max(20, days*5);
+        return Math.max(32, days*7); // avançado
+      }
+
+      function capByTarget(target, km){
+        // limite razoável de volume conforme distância alvo
+        const caps = { '5': 45, '10': 65, '21': 90, '42': 120, 'base': 60 };
+        return Math.min(km, caps[target]||60);
+      }
+
+      function weekDistribution(days, weekIndex){
+        // offsets a partir de segunda (0..6)
+        if(days===3){
+          return [
+            {offset:1, type: (weekIndex%2===0?'tempo':'interval')},
+            {offset:3, type:'easy'},
+            {offset:6, type:'long'}
+          ];
+        }
+        if(days===4){
+          return [
+            {offset:1, type:(weekIndex%2===0?'tempo':'interval')},
+            {offset:2, type:'easy'},
+            {offset:4, type:'easy'},
+            {offset:6, type:'long'}
+          ];
+        }
+        if(days===5){
+          return [
+            {offset:1, type:'interval'},
+            {offset:2, type:'easy'},
+            {offset:4, type:'tempo'},
+            {offset:5, type:'easy'},
+            {offset:6, type:'long'}
+          ];
+        }
+        // 6 dias
+        return [
+          {offset:0, type:'recovery'},
+          {offset:1, type:'interval'},
+          {offset:2, type:'easy'},
+          {offset:4, type:'tempo'},
+          {offset:5, type:'easy'},
+          {offset:6, type:'long'}
+        ];
+      }
+
+      function allocateKm(total, days, hasTempo, hasInterval){
+        // frações de volume por tipo
+        let long = Math.max(5, total*0.35);
+        let tempo = hasTempo ? total*0.18 : 0;
+        let intervals = hasInterval ? total*0.15 : 0;
+        let recovery = (days===6) ? total*0.10 : 0;
+        let remaining = total - (long + tempo + intervals + recovery);
+        const easyDays = days - (hasTempo?1:0) - (hasInterval?1:0) - (days===6?2:1); // desconta long e recovery (se houver)
+        const easyPer = easyDays>0 ? remaining / easyDays : 0;
+        return {long, tempo, intervals, recovery, easyPer};
+      }
+
+      function planForWeek(startDate, totalKm, days, weekIndex){
+        const dist = weekDistribution(days, weekIndex);
+        const hasTempo = dist.some(d=>d.type==='tempo');
+        const hasInterval = dist.some(d=>d.type==='interval');
+        const alloc = allocateKm(totalKm, days, hasTempo, hasInterval);
+        const runs = [];
+        let easyPool = 0; // para ajuste fino
+        dist.forEach(d => {
+          const date = new Date(startDate); date.setDate(date.getDate()+d.offset);
+          let km=0, type=d.type;
+          if(type==='long') km = alloc.long;
+          else if(type==='tempo') km = alloc.tempo;
+          else if(type==='interval') km = alloc.intervals;
+          else if(type==='recovery') km = alloc.recovery;
+          else { km = alloc.easyPer; easyPool += km; }
+          runs.push({date, type, km});
+        });
+        // Arredondar para .5km e ajustar soma
+        const rounded = runs.map(r => ({...r, km: Math.max(3, ceilHalf(r.km))}));
+        const sumKm = rounded.reduce((s,r)=>s+r.km,0);
+        let diff = Math.round((totalKm - sumKm)*2)/2; // ajuste em passos de 0.5
+        // Ajuste dif distribuindo em dias easy/long
+        for(let i=0; i<rounded.length && Math.abs(diff)>0; i++){
+          if(rounded[i].type==='easy' || rounded[i].type==='long'){
+            const add = diff>0 ? 0.5 : -0.5;
+            const newVal = Math.max(3, rounded[i].km + add);
+            if(newVal>=3){ rounded[i].km = newVal; diff -= add; }
+          }
+        }
+        return rounded;
+      }
+
+      function generatePlan({name, level, target, days, date, easy}){
+        const today = new Date(); today.setHours(0,0,0,0);
+        let targetDate = date ? new Date(date) : null;
+        if(!targetDate){ targetDate = new Date(today); targetDate.setDate(today.getDate()+56); } // 8 semanas padrão
+        const dLeft = daysBetween(today, targetDate);
+        let weeks = Math.max(4, Math.ceil(dLeft/7));
+        weeks = Math.min(weeks, 24);
+        const startKmBase = levelStartKm(level, days);
+        const startMonday = nextMonday(today);
+
+        let plan = [];
+        let wkKm = startKmBase;
+        for(let w=1; w<=weeks; w++){
+          // Progressão 8% por semana, com deload a cada 4ª semana (-20%)
+          if(w>1){ wkKm = wkKm * 1.08; }
+          if(w%4===0) wkKm = wkKm * 0.8;
+          wkKm = capByTarget(target, wkKm);
+
+          const weekStart = new Date(startMonday); weekStart.setDate(weekStart.getDate()+7*(w-1));
+          const runs = planForWeek(weekStart, wkKm, days, w);
+          const total = Math.round(runs.reduce((s,r)=>s+r.km,0));
+          plan.push({week:w, start:weekStart, end:new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()+6), totalKm: total, runs});
+        }
+
+        return {weeks, startMonday, targetDate, plan};
+      }
+
+      function fmtDate(d){ return d.toLocaleDateString('pt-BR'); }
+
+      function render({meta, plan, paces}){
+        // Summary
+        const {name, level, target, days, targetDate, weeks} = meta;
+        const distLabel = { '5':'5 km','10':'10 km','21':'21 km','42':'42 km','base':'Condicionamento'}[target];
+        dom.summary.classList.remove('hidden');
+        dom.summaryContent.innerHTML = `
+          <div class="row" style="align-items:center; justify-content:space-between">
+            <div>
+              <div><strong>${name?name+', ':''}</strong>${level} • ${days}x/sem • Objetivo: <strong>${distLabel}</strong></div>
+              <div class="muted">${weeks} semana(s) até ${fmtDate(targetDate)}</div>
+            </div>
+            <div class="badges">
+              ${paces ? `<span class="badge">Fácil ~ ${paces.easy} /km</span><span class="badge">Longo ~ ${paces.long} /km</span><span class="badge">Tempo ~ ${paces.tempo} /km</span><span class="badge">Intervalos ~ ${paces.interval} /km</span>` : `<span class="badge">Sem pace definido — use RPE</span>`}
+            </div>
+          </div>
+        `;
+
+        // Table
+        dom.plan.classList.remove('hidden');
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr><th>Semana</th><th>Período</th><th>Dia</th><th>Tipo</th><th>Km</th><th>Ritmo</th></tr>`;
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        plan.forEach(w => {
+          w.runs.forEach((r, idx) => {
+            const tr = document.createElement('tr');
+            if(idx===0){
+              const tdW = document.createElement('td'); tdW.rowSpan = w.runs.length; tdW.innerHTML = `<strong>${w.week}</strong><div class="muted">${w.totalKm} km/sem</div>`; tr.appendChild(tdW);
+              const tdP = document.createElement('td'); tdP.rowSpan = w.runs.length; tdP.innerHTML = `${fmtDate(w.start)} — ${fmtDate(w.end)}`; tr.appendChild(tdP);
+            }
+            const dayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+            const tdDay = document.createElement('td'); tdDay.textContent = `${dayNames[r.date.getDay()]} ${fmtDate(r.date)}`; tr.appendChild(tdDay);
+            const label = {easy:'Fácil', long:'Longo', tempo:'Tempo', interval:'Intervalos', recovery:'Recuperação'}[r.type] || r.type;
+            const tdType = document.createElement('td'); tdType.textContent = label; tr.appendChild(tdType);
+            const tdKm = document.createElement('td'); tdKm.textContent = r.km.toFixed(1).replace('.0',''); tr.appendChild(tdKm);
+
+            const tdPace = document.createElement('td');
+            if(paces){
+              let p = '';
+              if(r.type==='easy') p = paces.easy;
+              else if(r.type==='recovery') p = secToPace(paceToSec(paces.easy)+30);
+              else if(r.type==='long') p = paces.long;
+              else if(r.type==='tempo') p = paces.tempo;
+              else if(r.type==='interval') p = paces.interval;
+              tdPace.innerHTML = `${p} /km`;
+            } else {
+              tdPace.textContent = rpeText(r.type);
+            }
+            tr.appendChild(tdPace);
+            tbody.appendChild(tr);
+          });
+        });
+        table.appendChild(tbody);
+        dom.tableWrapper.innerHTML = '';
+        dom.tableWrapper.appendChild(table);
+        dom.btnExport.disabled = false;
+        dom.btnPrint.disabled = false;
+      }
+
+      function exportCSV(plan){
+        const rows = [["Semana","Período","Dia","Tipo","Km","Ritmo/RPE"]];
+        const dayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+        plan.forEach(w => {
+          w.runs.forEach((r, idx) => {
+            const period = `${fmtDate(w.start)} — ${fmtDate(w.end)}`;
+            rows.push([w.week, period, `${dayNames[r.date.getDay()]} ${fmtDate(r.date)}`, r.type, r.km.toFixed(1).replace('.0',''), '']);
+          });
+        });
+        const csv = rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href=url; a.download='plano-corrida.csv'; a.click(); URL.revokeObjectURL(url);
+      }
+
+      // Events
+      dom.btnGen.addEventListener('click', () => {
+        const form = getForm();
+        saveForm();
+        dom.status.textContent = 'Gerando plano...';
+        // validate date
+        if(!form.date){ dom.status.textContent='Dica: escolha uma data alvo (pelo menos 4 semanas).'; }
+        const easySec = paceToSec(form.easy);
+        const paces = computePaces(easySec);
+        const g = generatePlan(form);
+        const meta = { ...form, targetDate: form.date? new Date(form.date): new Date(), weeks: g.weeks };
+        render({meta, plan:g.plan, paces});
+        dom.status.textContent = 'Plano pronto!';
+      });
+
+      dom.btnExport.addEventListener('click', () => {
+        const form = getForm();
+        const g = generatePlan(form);
+        exportCSV(g.plan);
+      });
+
+      dom.btnPrint.addEventListener('click', () => window.print());
+
+    })();
+  </script>
+</body>
+</html>
