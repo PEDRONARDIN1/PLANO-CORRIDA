@@ -209,6 +209,7 @@
         }
       }
 
+      const KM_MINIMO_DIA = 4; // km mínimos por treino
       function levelStartKm(level, days){
         // volume inicial aproximado (km/semana)
         if(level==='iniciante') return Math.max(12, days*3);
@@ -289,7 +290,7 @@
           runs.push({date, type, km});
         });
         // Arredondar para .5km e ajustar soma
-        const rounded = runs.map(r => ({...r, km: Math.max(3, ceilHalf(r.km))}));
+        const rounded = runs.map(r => ({...r, km: Math.max(KM_MINIMO_DIA, ceilHalf(r.km))}));
         const sumKm = rounded.reduce((s,r)=>s+r.km,0);
         let diff = Math.round((totalKm - sumKm)*2)/2; // ajuste em passos de 0.5
         // Ajuste dif distribuindo em dias easy/long
